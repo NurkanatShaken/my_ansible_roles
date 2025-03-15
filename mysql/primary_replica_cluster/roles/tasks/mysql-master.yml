@@ -1,0 +1,88 @@
+---
+- name: Allow required ports
+  ansible.builtin.ufw:
+    rule: allow
+    port: '{{ mysql_port }}'
+    proto: tcp
+
+- name: Installing mysql-server
+  apt:
+    name: mysql-server
+    state: present
+
+- name: Started and enabled mysql-server
+  service:
+    name: mysql
+    state: started
+    enabled: yes
+
+- name: Configure config file
+  copy:
+    src: mysqld-master.cnf
+    dest: /etc/mysql/mysql.conf.d/mysqld.cnf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart mysql master
+
+- meta: flush_handlers
+
+- name: Ensure MySQL Python package is installed
+  apt:
+    name: python3-mysqldb
+    state: present
+
+- name: Create mysql replication user
+  community.mysql.mysql_user:
+    login_user: "{{ mysql_user }}"
+    name: "{{ mysql_user_for_replica }}"
+    host: "{{ hostvars[groups['mysql_replica'][0]]['ansible_host'] }}"
+    password: "{{ password_for_replica_user}}"
+    priv: "*.*:REPLICATION SLAVE"
+    state: present
+    column_case_sensitive: true
+
+- name: Flush privileges
+  community.mysql.mysql_query:
+    login_user: root
+    query: "FLUSH PRIVILEGES;"
+
+- name: Lock tables and get master status
+  community.mysql.mysql_query:
+    login_user: root
+    query:
+      - "FLUSH TABLES WITH READ LOCK;"
+      - "SHOW MASTER STATUS;"
+  register: master_status
+  delegate_to: master
+
+- name: Extract File and Position from master_status.query_result
+  set_fact:
+    binlog_file: "{{ master_status.query_result[1][0].File }}"
+    binlog_position: "{{ master_status.query_result[1][0].Position }}"
+  delegate_to: master
+  run_once: true
+
+- name: Debug extracted values
+  debug:
+    msg:
+      - "Binlog File: {{ binlog_file }}"
+      - "Binlog Position: {{ binlog_position }}"
+
+- name: Dump all databases to hostname.sql
+  community.mysql.mysql_db:
+    state: dump
+    name: all
+    target: /tmp/dump.sql
+  
+
+- name: Unlock tables
+  community.mysql.mysql_query:
+    login_user: "{{ mysql_user }}"
+    query: "UNLOCK TABLES;"
+
+- name: Fetch file from source server
+  ansible.builtin.fetch:
+    src: /tmp/dump.sql
+    dest: /tmp/dump.sql
+    flat: yes
