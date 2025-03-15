@@ -1,0 +1,6 @@
+---
+- name: Create mysql cluster
+  hosts: all
+  become: true
+  roles:
+    - mysql
