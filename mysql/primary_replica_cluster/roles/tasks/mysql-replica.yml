@@ -1,0 +1,74 @@
+---
+- name: Installing mysql-server
+  apt:
+    name: mysql-server
+    state: present
+
+- name: Started and enabled mysql-server
+  service:
+    name: mysql
+    state: started
+    enabled: yes
+
+- name: Ensure MySQL Python package is installed
+  apt:
+    name: python3-mysqldb
+    state: present
+
+- name: Copy dump
+  copy:
+    src: /tmp/dump.sql
+    dest: /tmp/dump.sql
+
+- name: Edit the configuration file
+  copy:
+    src: mysqld-replica.cnf
+    dest: /etc/mysql/mysql.conf.d/mysqld.cnf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart mysql replica
+
+- meta: flush_handlers
+
+- name: Restore database
+  community.mysql.mysql_db:
+    name: all
+    state: import
+    target: /tmp/dump.sql
+
+- name: Setting replica
+  community.mysql.mysql_query:
+    login_user: "{{ mysql_user }}"
+    query: >
+      CHANGE REPLICATION SOURCE TO
+      SOURCE_HOST='{{ hostvars[groups["mysql_master"][0]]["ansible_host"] }}',
+      SOURCE_PORT={{ mysql_port }},
+      SOURCE_USER='{{ mysql_user_for_replica }}',
+      SOURCE_PASSWORD='{{ password_for_replica_user }}',
+      SOURCE_LOG_FILE='{{ hostvars["master"]["binlog_file"] }}',
+      SOURCE_LOG_POS={{ hostvars["master"]["binlog_position"] }}; 
+
+- name: Pause before checking MySQL replication status
+  ansible.builtin.pause:
+    seconds: 10
+
+- name: Start replication
+  community.mysql.mysql_query:
+    login_user: "{{ mysql_user }}"
+    query: "START REPLICA;"
+
+- name: Check replication status
+  community.mysql.mysql_query:
+    login_user: "{{ mysql_user }}"
+    query: "SHOW REPLICA STATUS;"
+  register: replica_status
+
+- name: Show replication status output
+  debug:
+    msg: "{{ replica_status.query_result | to_nice_json }}"
+
+- name: Remove dump file
+  file:
+    path: /tmp/dump.sql
+    state: absent
