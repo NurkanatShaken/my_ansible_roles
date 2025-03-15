@@ -30,22 +30,19 @@
 
 ## Инструкция по использованию
 
-1. **Настроить inventory** (`inventory.yml`):
+1. **Настроить inventory** (`inventory.ini`):
 
-```yaml
-all:
-  hosts:
-    master:
-      ansible_host: 192.168.1.10
-    replica:
-      ansible_host: 192.168.1.11
-  children:
-    mysql_master:
-      hosts:
-        master:
-    mysql_replica:
-      hosts:
-        replica:
+```ini
+[all]
+master ansible_host=192.168.1.10
+replica ansible_host=192.168.1.11
+
+[mysql_master]
+master
+
+[mysql_replica]
+replica
+
 ```
 
 2. **Заполнить переменные** в `vars/main.yml`:
