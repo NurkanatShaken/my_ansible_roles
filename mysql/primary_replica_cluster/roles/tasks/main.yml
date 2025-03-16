@@ -1,8 +1,0 @@
----
-- name: Configure MySQL Master
-  import_tasks: mysql-master.yml
-  when: "'mysql_master' in group_names"
-
-- name: Configure MySQL Replica
-  import_tasks: mysql-replica.yml
-  when: "'mysql_replica' in group_names"

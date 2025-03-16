@@ -1,7 +1,0 @@
----
-mysql_user: "root"
-mysql_user_for_replica: "replica"
-password_for_replica_user: "SuperSecurePassword"
-mysql_port: "3306"
-
-
